@@ -1,0 +1,28 @@
+# Host overlay for e4drr-crafd-icpac (crafd-gpu).
+#
+# Publishes the engine and REST proxy on the Tailscale and ICPAC-LAN addresses
+# in addition to localhost, so the team can reach them without an SSH tunnel.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.crafd.yml up -d
+#   (or: make up-crafd)
+#
+# Addresses are pinned explicitly rather than using 0.0.0.0. ufw is INACTIVE on
+# this host, so the bind address is the only thing limiting reach — 0.0.0.0 would
+# also publish on docker0, virbr0 and any interface added later.
+#
+# ⚠️ 10.10.3.90 exposes the engine to every host on ICPAC's 10.10.3.0/24. ecFlow's
+# white list (ECF_LISTS, see data/ecf.lists) restricts *authorisation*, but the
+# username it checks is supplied by the client and is therefore spoofable. Treat
+# the LAN bind as "trusted network", not as authentication. Drop the LAN entry and
+# keep only Tailscale if that is not acceptable.
+
+services:
+  ecflow-server:
+    ports:
+      - "${ECF_BIND_TAILSCALE:?set ECF_BIND_TAILSCALE in .env}:${ECF_PORT:-3141}:${ECF_PORT:-3141}"
+      - "${ECF_BIND_LAN:?set ECF_BIND_LAN in .env}:${ECF_PORT:-3141}:${ECF_PORT:-3141}"
+
+  ecflow-http:
+    ports:
+      - "${ECF_BIND_TAILSCALE:?set ECF_BIND_TAILSCALE in .env}:${ECF_HTTP_PORT:-8080}:${ECF_HTTP_PORT:-8080}"
+      - "${ECF_BIND_LAN:?set ECF_BIND_LAN in .env}:${ECF_HTTP_PORT:-8080}:${ECF_HTTP_PORT:-8080}"
