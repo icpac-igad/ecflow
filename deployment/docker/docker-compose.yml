@@ -1,0 +1,106 @@
+# E4DRR ecFlow stack.
+#
+# Module 1 (ecflow-server) is the stateful singleton and the workflow clock: it must
+# stay up, because its 1-second scheduler tick is what drives every time/date/cron
+# trigger. Modules 2 and 3 are stateless and may be restarted or replaced at will.
+#
+# Everything is bound to localhost by default; reach it over the tailnet via an SSH
+# tunnel rather than exposing the ports. See README.
+
+name: e4drr-ecflow
+
+x-ecflow-common: &ecflow-common
+  image: ${ECFLOW_IMAGE:-e4drr/ecflow:5.18.0}
+  # Run as the host user so everything written into the bind-mounted state
+  # directory stays host-owned and editable without sudo.
+  user: "${HOST_UID:-1001}:${HOST_GID:-1001}"
+  # Group 0 lets the entrypoint add the missing /etc/passwd entry for that uid;
+  # ecFlow aborts on a uid it cannot resolve to a name. It grants no privilege
+  # beyond files already group-0-writable in the image.
+  group_add: ["0"]
+  # ecFlow names its checkpoint, log and white-list files "<hostname>.<port>.ecf.*".
+  # Without a fixed hostname that is the container ID, so recreating the container
+  # (any `down`/`up`, or an image change) produces a NEW checkpoint name, the server
+  # finds nothing to recover, and every suite is silently lost. Pin it.
+  hostname: ${ECF_NODENAME:-e4drr-ecflow}
+  environment:
+    ECF_HOME: /ecflow/home
+    ECF_PORT: ${ECF_PORT:-3141}
+  restart: unless-stopped
+  # This server is shared with a GPU workload. Log rotation is capped so a chatty
+  # suite can never fill the root filesystem out from under it.
+  logging:
+    driver: json-file
+    options: { max-size: "20m", max-file: "5" }
+
+services:
+  # -- module 1: the engine ---------------------------------------------------
+  ecflow-server:
+    <<: *ecflow-common
+    container_name: e4drr-ecflow-server
+    command: ["server"]
+    environment:
+      ECF_HOME: /ecflow/home
+      ECF_PORT: ${ECF_PORT:-3141}
+      # Authorisation. Fixed path rather than the default "<host>.<port>.ecf.lists"
+      # so it stays valid regardless of hostname. See suites/../ecf.lists.
+      ECF_LISTS: /ecflow/home/ecf.lists
+    ports:
+      # Localhost only by default. Additional interfaces are opted into via
+      # docker-compose.crafd.yml — see `make up-crafd`.
+      - "${ECF_BIND:-127.0.0.1}:${ECF_PORT:-3141}:${ECF_PORT:-3141}"
+    volumes:
+      # ECF_HOME: checkpoint, log, suite scripts, generated jobs, job output.
+      - ${ECF_DATA_DIR:-./data}:/ecflow/home
+      # Suite definitions, mounted read-only: the container runs them, tracksuite
+      # owns changing them.
+      - ./suites:/ecflow/suites:ro
+    deploy:
+      resources:
+        limits:
+          memory: ${ECF_MEM_LIMIT:-4g}
+          cpus: "${ECF_CPU_LIMIT:-4}"
+    healthcheck:
+      test: ["CMD", "ecflow_client", "--ping", "--host=localhost", "--port=${ECF_PORT:-3141}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  # -- module 2: REST proxy ---------------------------------------------------
+  # Stateless: a fresh client connection per request, no workflow state retained.
+  ecflow-http:
+    <<: *ecflow-common
+    container_name: e4drr-ecflow-http
+    command: ["http"]
+    profiles: ["http"]
+    depends_on:
+      ecflow-server: { condition: service_healthy }
+    environment:
+      ECF_HOME: /ecflow/home
+      ECF_PORT: ${ECF_PORT:-3141}
+      ECF_HOST: ecflow-server
+      ECF_HTTP_ARGS: ${ECF_HTTP_ARGS:-}
+    ports:
+      - "${ECF_HTTP_BIND:-127.0.0.1}:${ECF_HTTP_PORT:-8080}:${ECF_HTTP_PORT:-8080}"
+    deploy:
+      resources:
+        limits:
+          memory: ${ECF_HTTP_MEM_LIMIT:-512m}
+
+  # -- module 3: UDP telemetry ingress (phase 2) ------------------------------
+  # Only needed once tasks run off this box and report progress via ecflow-light.
+  ecflow-udp:
+    <<: *ecflow-common
+    container_name: e4drr-ecflow-udp
+    command: ["udp"]
+    profiles: ["udp"]
+    depends_on:
+      ecflow-server: { condition: service_healthy }
+    environment:
+      ECF_HOME: /ecflow/home
+      ECF_PORT: ${ECF_PORT:-3141}
+      ECF_HOST: ecflow-server
+      ECF_UDP_ARGS: ${ECF_UDP_ARGS:-}
+    ports:
+      - "${ECF_UDP_BIND:-127.0.0.1}:${ECF_UDP_PORT:-19999}:${ECF_UDP_PORT:-19999}/udp"
