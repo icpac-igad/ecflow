@@ -14,11 +14,13 @@ Era handling follows ECFLOW_50R1_OPERATIONALIZATION.md — BOTH switches must ag
 Whitelisted stages only. Bound to the docker-bridge gateway. stdlib only."""
 import http.server, subprocess, os, urllib.parse
 
-PIPE = "/home/hkoros/cno-e4drr/devops/lithops_cr_ecmwf_gik"
-PY   = "/home/hkoros/gikvenv/bin/python"
-KEY  = PIPE + "/service_account/ecmwf-lithops-deployer-key.json"
+# All host-specific paths are env-driven — set these in the systemd unit (see
+# systemd/gik-executor.service.example). Real values live in the private deploy repo.
+PIPE = os.environ.get("GIK_PIPE_DIR", "/path/to/cno-e4drr/devops/lithops_cr_ecmwf_gik")
+PY   = os.environ.get("GIK_VENV_PY", "/path/to/gikvenv/bin/python")
+KEY  = os.environ.get("GIK_SA_KEY", PIPE + "/service_account/<sa-key>.json")
 PORT = int(os.environ.get("EXEC_PORT", "8091"))
-BIND = os.environ.get("EXEC_BIND", "172.18.0.1")
+BIND = os.environ.get("EXEC_BIND", "172.18.0.1")  # docker-bridge gateway on the host
 
 DISCOVER = (
     "import gcsfs, s3fs, sys\n"

@@ -8,9 +8,11 @@ ECFLOW = os.environ.get("ECFLOW_HTTP", "http://localhost:8080/v1")
 ROOT   = os.path.dirname(os.path.abspath(__file__))
 PORT   = int(os.environ.get("DASH_PORT", "8090"))
 BIND   = os.environ.get("DASH_BIND", "0.0.0.0")
-ECF_LOG = os.environ.get("ECF_LOG", "/home/hkoros/e4drr-ecflow/data/e4drr-ecflow.3141.ecf.log")
+# Host-specific paths are env-driven; real values live in the private deploy repo.
+ECF_DATA = os.environ.get("ECF_DATA_DIR", "/path/to/ecflow/data")
+ECF_LOG = os.environ.get("ECF_LOG", "%s/e4drr-ecflow.3141.ecf.log" % ECF_DATA)
 SUITE   = os.environ.get("GIK_SUITE", "ecmwf_ifs_gik")
-JOB_DIR = os.environ.get("GIK_JOB_DIR", "/home/hkoros/e4drr-ecflow/data/%s/day" % SUITE)
+JOB_DIR = os.environ.get("GIK_JOB_DIR", "%s/%s/day" % (ECF_DATA, SUITE))
 RUN_LOGS = os.path.join(ROOT, "run_logs")
 STAGE_NAMES = ["discover", "lithops_parquet", "icechunk_append", "publish_mirror"]
 
