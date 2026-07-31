@@ -1,0 +1,13 @@
+# Copy to ~/.config/systemd/user/ecflow-dashboard.service and set INSTALL_DIR.
+# Machine-specific units (real paths/host) live in the private deployment repo.
+[Unit]
+Description=ecFlow monitoring dashboard
+After=network.target
+[Service]
+Environment=DASH_PORT=8090
+Environment=DASH_BIND=0.0.0.0
+Environment=ECFLOW_HTTP=http://localhost:8080/v1
+ExecStart=/usr/bin/python3 %h/INSTALL_DIR/dashboard_server.py
+Restart=always
+[Install]
+WantedBy=default.target

@@ -1,0 +1,13 @@
+# Copy to ~/.config/systemd/user/gik-executor.service and set INSTALL_DIR + EXEC_BIND.
+# EXEC_BIND is the docker bridge IP the ecFlow container reaches the host on.
+[Unit]
+Description=Host executor (ecFlow container -> host pipeline bridge)
+After=network.target docker.service
+[Service]
+Environment=EXEC_PORT=8091
+Environment=EXEC_BIND=172.18.0.1
+ExecStart=/usr/bin/python3 %h/INSTALL_DIR/gik_executor.py
+Restart=always
+RestartSec=5
+[Install]
+WantedBy=default.target
