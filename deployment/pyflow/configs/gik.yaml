@@ -1,0 +1,12 @@
+# ECMWF IFS GIK daily pipeline — workflow definition (input to the pyflow builder).
+# Add a new dataset (e.g. GEFS) by adding another YAML like this — no code changes.
+suite: ecmwf_ifs_gik
+schedule: "06:00"        # daily cron, UTC — ingest the 00z run
+run: "00"                # forecast cycle
+executor: "http://172.18.0.1:8091"   # host executor bridge (era-aware run resolved there)
+
+stages:
+  - {name: discover,        title: "Discover",          kind: coordinator,   endpoint: discover,        timeout: 180}
+  - {name: lithops_parquet, title: "Workers · Lithops", kind: cloud-workers, endpoint: lithops_parquet, timeout: 1200}
+  - {name: icechunk_append, title: "Icechunk Append",   kind: reduce-store,  endpoint: null}   # Phase 3 (stub)
+  - {name: publish_mirror,  title: "Publish · Mirror",  kind: publish,       endpoint: null}   # Phase 3 (stub)

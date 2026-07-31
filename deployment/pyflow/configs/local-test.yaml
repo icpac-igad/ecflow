@@ -1,0 +1,9 @@
+suite: gik_local_test
+schedule:                # empty -> on-demand (no cron), runs on begin
+run: "00"
+executor: "http://127.0.0.1:9999"
+stages:
+  - {name: discover,        title: "Discover",        kind: coordinator}
+  - {name: lithops_parquet, title: "Workers",         kind: cloud-workers}
+  - {name: icechunk_append, title: "Icechunk Append", kind: reduce-store}
+  - {name: publish_mirror,  title: "Publish",         kind: publish}
