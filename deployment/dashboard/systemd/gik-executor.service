@@ -1,0 +1,11 @@
+[Unit]
+Description=GIK host executor (ecFlow container -> host pipeline bridge)
+After=network.target docker.service
+[Service]
+Environment=EXEC_PORT=8091
+Environment=EXEC_BIND=172.18.0.1
+ExecStart=/usr/bin/python3 /home/hkoros/e4drr-ecflow-dashboard/gik_executor.py
+Restart=always
+RestartSec=5
+[Install]
+WantedBy=default.target

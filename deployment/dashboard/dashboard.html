@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>E4DRR · ecFlow — GIK</title>
+<style>
+  :root{
+    --bg:#0a0a0b; --side:#0c0c0e; --card:#141416; --card2:#1a1a1d; --border:#242427;
+    --text:#e9eaec; --muted:#8a8d94; --faint:#5b5e66;
+    --green:#3aa675; --greenb:#2ac769; --blue:#4c8dff; --cyan:#2bb0c4; --grey:#5a5e66;
+    --red:#e5534b; --amber:#d9a441; --yellow:#d4b942;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font:13px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text);display:flex;min-height:100vh}
+  a{color:inherit;text-decoration:none}
+  /* sidebar */
+  .side{width:216px;flex:0 0 216px;background:var(--side);border-right:1px solid var(--border);display:flex;flex-direction:column;position:sticky;top:0;height:100vh}
+  .ws{display:flex;align-items:center;gap:10px;padding:14px 14px}
+  .ws .logo{width:28px;height:28px;border-radius:7px;background:linear-gradient(135deg,#2ac769,#0f7a44);display:flex;align-items:center;justify-content:center;font-size:15px}
+  .ws .t b{display:block;font-size:13px}.ws .t span{font-size:11px;color:var(--muted)}
+  .ws .caret{margin-left:auto;color:var(--faint);font-size:12px}
+  .search{margin:2px 12px 8px;display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--border);border-radius:7px;padding:6px 9px;color:var(--muted);font-size:12px}
+  .search .k{margin-left:auto;border:1px solid var(--border);border-radius:4px;padding:0 5px;font-size:10px}
+  nav{padding:4px 8px;display:flex;flex-direction:column;gap:1px}
+  nav a{display:flex;align-items:center;gap:10px;padding:7px 11px;border-radius:7px;color:var(--muted);font-size:13px;cursor:pointer}
+  nav a .i{width:16px;text-align:center;font-size:13px}
+  nav a:hover{background:var(--card);color:var(--text)}
+  nav a.active{background:var(--card2);color:var(--text)}
+  nav a .tag{margin-left:auto;font-size:9px;background:#1a2f6b;color:#9bb8ff;border-radius:9px;padding:1px 6px}
+  .side .foot{margin-top:auto;padding:10px 14px;border-top:1px solid var(--border);font-size:11.5px;color:var(--muted);display:flex;align-items:center;gap:8px}
+  .side .foot .dot{width:7px;height:7px;border-radius:50%;background:var(--grey)}
+  /* main */
+  .main{flex:1;min-width:0;display:flex;flex-direction:column}
+  .topbar{display:flex;align-items:center;gap:12px;padding:11px 20px;border-bottom:1px solid var(--border)}
+  .crumb{font-size:14px;color:var(--muted)}.crumb .i{color:var(--muted)}.crumb b{color:var(--text)}.crumb .sep{color:var(--faint);margin:0 4px}.crumb a{cursor:pointer}
+  .topbar .spacer{flex:1}
+  .rng{display:flex;align-items:center;gap:6px;background:var(--card);border:1px solid var(--border);border-radius:7px;padding:5px 11px;font-size:12px;color:var(--muted)}
+  .controls{display:flex;align-items:center;gap:10px;font-size:11.5px;color:var(--muted)}
+  .controls button{background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:5px 10px;cursor:pointer;font-size:11.5px}
+  .controls button:hover{border-color:var(--greenb)}
+  .content{padding:18px 20px;display:flex;flex-direction:column;gap:16px}
+  .grid2{display:grid;grid-template-columns:1.55fr 1fr;gap:16px}
+  @media(max-width:1050px){.grid2{grid-template-columns:1fr}}
+  .panel{background:transparent;border:1px solid var(--border);border-radius:10px;padding:16px 18px}
+  .panel h2{font-size:15px;margin:0 0 14px;font-weight:600}
+  .panel .h2row{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+  .panel .h2row h2{margin:0}
+  /* run timeline (dotted) */
+  .tldots{display:flex;align-items:center;gap:3px;height:12px;margin:6px 0 16px;flex-wrap:nowrap;overflow:hidden}
+  .tldots i{width:6px;height:6px;border-radius:50%;background:var(--card2);flex:0 0 6px}
+  /* state stat columns */
+  .sstats{display:grid;grid-template-columns:repeat(5,1fr);gap:0;border:1px solid var(--border);border-radius:8px;overflow:hidden}
+  .sstat{padding:11px 12px 13px;position:relative;border-right:1px solid var(--border);cursor:pointer}
+  .sstat:last-child{border-right:none}
+  .sstat::before{content:"";position:absolute;top:0;left:0;right:0;height:3px;background:var(--bar,var(--grey))}
+  .sstat .n{font-size:20px;font-weight:600}.sstat .l{font-size:11px;color:var(--muted);margin-top:2px}
+  .sstat:hover{background:var(--card)}
+  .emptybox{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:34px 10px;color:var(--muted);text-align:center}
+  .pixart{display:grid;grid-template-columns:repeat(7,9px);gap:3px}
+  .pixart i{width:9px;height:9px;border-radius:2px;background:var(--card2)}
+  .pixart i.on{background:var(--green)}
+  /* work pool card */
+  .wp{border:1px solid var(--border);border-radius:9px;padding:0}
+  .wp .top{display:flex;align-items:center;gap:8px;padding:13px 15px;border-bottom:1px solid var(--border)}
+  .wp .top .nm{color:var(--blue);font-weight:600;font-size:14px}.wp .top .dot{width:7px;height:7px;border-radius:50%;background:var(--greenb)}
+  .wp .top .tot{margin-left:auto;color:var(--muted);font-size:12px}
+  .wp .cols{display:grid;grid-template-columns:repeat(4,1fr);gap:0}
+  .wp .cols .c{padding:12px 15px;border-right:1px solid var(--border)}.wp .cols .c:last-child{border-right:none}
+  .wp .cols .c .l{color:var(--muted);font-size:11px}.wp .cols .c .v{font-size:14px;margin-top:4px}
+  /* metric cards */
+  .metrics{display:grid;grid-template-columns:repeat(5,1fr);gap:12px}
+  @media(max-width:1100px){.metrics{grid-template-columns:repeat(2,1fr)}}
+  .metric{border:1px solid var(--border);border-radius:9px;padding:12px 14px}
+  .metric .l{font-size:11.5px;color:var(--muted)}.metric .v{font-size:22px;font-weight:600;margin:3px 0}
+  .metric .s{font-size:10.5px;color:var(--faint)}
+  .mbars{display:flex;align-items:flex-end;gap:2px;height:22px;margin-top:8px}
+  .mbars i{flex:1;background:var(--card2);border-radius:1px;min-width:2px}
+  /* histogram band */
+  .hist{border:1px solid var(--border);border-radius:9px;padding:14px 16px}
+  .histrow{display:flex;align-items:flex-end;gap:5px;height:120px}
+  .histrow .col{flex:1;display:flex;flex-direction:column;justify-content:flex-end;gap:2px;height:100%}
+  .histrow .col b{width:100%;border-radius:2px 2px 0 0;min-height:2px}
+  .histx{display:flex;justify-content:space-between;color:var(--faint);font-size:11px;margin-top:8px}
+  /* table */
+  .tabs{display:flex;gap:8px;margin-bottom:14px}
+  .tab{display:flex;align-items:center;gap:7px;background:var(--card);border:1px solid var(--border);border-radius:7px;padding:5px 12px;font-size:12px;cursor:pointer;color:var(--muted)}
+  .tab.on{color:var(--text);border-color:var(--greenb)}
+  .tab .cnt{background:var(--card2);border-radius:7px;padding:0 6px;font-size:10.5px}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  thead th{text-align:left;color:var(--muted);font-weight:500;font-size:11.5px;padding:9px 12px;border-bottom:1px solid var(--border)}
+  tbody td{padding:11px 12px;border-bottom:1px solid var(--border)}
+  tbody tr{cursor:pointer}tbody tr:hover{background:var(--card)}
+  .flowname{display:flex;align-items:center;gap:8px;font-weight:600}
+  .runchip{display:inline-flex;align-items:center;gap:6px;color:var(--blue)}
+  .stagedots{display:flex;gap:4px}
+  .dot{width:7px;height:7px;border-radius:50%;display:inline-block}
+  .badge{font-size:9.5px;font-weight:700;padding:2px 8px;border-radius:20px;text-transform:uppercase;letter-spacing:.3px;color:#08110a}
+  .b-completed{background:var(--greenb)}.b-running{background:var(--blue);color:#fff}.b-pending{background:var(--cyan)}
+  .b-scheduled{background:var(--yellow)}.b-failed{background:var(--red);color:#fff}.b-paused{background:var(--amber)}.b-unknown{background:#333;color:#e9eaec}
+  .filterbar{display:flex;align-items:center;gap:8px;margin:2px 0 4px}
+  .fbtn{cursor:pointer;padding:5px 12px;border-radius:7px;font-size:12px;border:1px solid var(--border);color:var(--muted)}
+  .fbtn.on{background:var(--card2);color:var(--text);border-color:var(--greenb)}
+  .fbtn:hover{color:var(--text)}
+  pre.out{margin:0;max-height:60vh;overflow:auto;padding:14px 15px;font:11.5px/1.5 ui-monospace,Menlo,monospace;color:#cdd6e0;background:#060708;border:1px solid var(--border);border-radius:8px;white-space:pre-wrap;word-break:break-word}
+  .empty{color:var(--muted);padding:28px;text-align:center}
+  .kv{display:flex;flex-direction:column;gap:10px}.kv .row{display:flex;justify-content:space-between;gap:12px}
+  .kv .row .k{color:var(--muted);font-size:12px}.kv .row .v{font-size:12px;font-family:ui-monospace,Menlo,monospace;text-align:right;max-width:62%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .kv .row .v.green{color:var(--greenb)}
+  .toggle{width:34px;height:18px;border-radius:10px;background:var(--greenb);position:relative;display:inline-block}
+  .toggle::after{content:"";position:absolute;top:2px;right:2px;width:14px;height:14px;border-radius:50%;background:#fff}
+</style>
+</head>
+<body>
+  <aside class="side">
+    <div class="ws"><div class="logo">🌧️</div><div class="t"><b>default</b><span>hkoros · icpac</span></div><span class="caret">⇅</span></div>
+    <div class="search">Search workspace<span class="k">⌘K</span></div>
+    <nav id="nav">
+      <a data-v="home" class="active"><span class="i">🏠</span>Home</a>
+      <a data-v="runs"><span class="i">▶️</span>Runs</a>
+      <a data-v="flows"><span class="i">🧩</span>Flows</a>
+      <a data-v="deployments"><span class="i">🚀</span>Deployments</a>
+      <a data-v="pools"><span class="i">⚙️</span>Work pools</a>
+      <a data-v="schedulers"><span class="i">⏱️</span>Schedulers</a>
+    </nav>
+    <div class="foot"><span class="dot" id="srvdot"></span><span id="srvtxt">connecting…</span></div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="crumb" id="crumb"><span class="i">🏠</span> Home</div>
+      <span class="spacer"></span>
+      <div class="rng">📅 Past 7 days ▾</div>
+      <div class="controls"><span id="updated">—</span><label><input type="checkbox" id="auto" checked> auto</label></div>
+    </div>
+    <div class="content" id="view"></div>
+  </div>
+
+<script>
+const API="/api";
+const SUITE="ecmwf_ifs_gik", FAMILY="day";
+const ORDER=["discover","lithops_parquet","icechunk_append","publish_mirror"];
+const STAGES={
+  discover:{title:"Discover",kind:"coordinator"}, lithops_parquet:{title:"Workers · Lithops",kind:"cloud workers"},
+  icechunk_append:{title:"Icechunk Append",kind:"reduce / store"}, publish_mirror:{title:"Publish · Mirror",kind:"publish"}};
+const MAP={complete:"completed",active:"running",submitted:"pending",queued:"scheduled",aborted:"failed",suspended:"paused",unknown:"unknown"};
+const CVAR={completed:"--greenb",running:"--blue",pending:"--cyan",scheduled:"--yellow",failed:"--red",paused:"--amber",unknown:"--grey"};
+const c=v=>`var(${CVAR[v]||"--grey"})`;
+let view="home", selRun=null, runFilter="all", timer=null, lastSig=null, statusCache={};
+
+async function j(u){const r=await fetch(u,{cache:"no-store"});if(!r.ok)throw new Error(r.status);return r.json();}
+async function statusOf(p){try{const s=await j(`${API}/suites/${p}/status`);return MAP[(s.status||"unknown").toLowerCase()]||"unknown";}catch(e){return"unknown";}}
+const dur=(a,b)=>{try{const s=(new Date(b.replace(" ","T"))-new Date(a.replace(" ","T")))/1000;if(s<0)return"—";return s<60?Math.round(s)+"s":Math.floor(s/60)+"m "+Math.round(s%60)+"s";}catch(e){return"—";}};
+const durS=(a,b)=>{try{const s=(new Date(b.replace(" ","T"))-new Date(a.replace(" ","T")))/1000;return s>0?s:0;}catch(e){return 0;}};
+function nextRun(){const now=new Date();const n=new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),now.getUTCDate(),6,0,0));if(now>=n)n.setUTCDate(n.getUTCDate()+1);const ms=n-now,h=Math.floor(ms/3.6e6),m=Math.floor(ms%3.6e6/6e4);return{when:n.toISOString().replace("T"," ").slice(0,16)+" UTC",inTxt:`in ${h}h ${m}m`};}
+
+async function loadServer(){try{const s=await j(`${API}/server/status`);let st=(typeof s.status==="string")?s.status:"RUNNING";document.getElementById("srvtxt").textContent="engine "+st;document.getElementById("srvdot").style.background=/run/i.test(st)?"var(--greenb)":"var(--amber)";return st;}catch(e){document.getElementById("srvtxt").textContent="unreachable";document.getElementById("srvdot").style.background="var(--red)";return"UNREACHABLE";}}
+async function pipeline(){let tree;try{tree=await j(`${API}/suites/tree`);}catch(e){return null;}const fam=(tree[SUITE]||{})[FAMILY]||{};const tasks=Object.keys(fam);const stages=[];for(const t of tasks){const p=`${SUITE}/${FAMILY}/${t}`;const st=await statusOf(p);statusCache[p]=st;stages.push({name:t,path:p,state:st});}return{stages,state:await statusOf(SUITE)};}
+async function getRuns(){try{return await j("/runs");}catch(e){return[];}}
+function windowRuns(runs){const now=new Date();return runs.filter(r=>{try{return (now-new Date(r.start.replace(" ","T")))<=7*864e5;}catch(e){return true;}});}
+function stateCounts(runs){const o={scheduled:0,pending:0,running:0,completed:0,failed:0};runs.forEach(r=>{if(r.state in o)o[r.state]++;});return o;}
+
+function crumb(h){document.getElementById("crumb").innerHTML=h;}
+function nav(v){view=v;selRun=null;document.querySelectorAll("#nav a").forEach(a=>a.classList.toggle("active",a.dataset.v===v));render(true);}
+document.getElementById("nav").addEventListener("click",e=>{const a=e.target.closest("a");if(a)nav(a.dataset.v);});
+
+async function render(force){
+  const st=await loadServer();
+  const V=document.getElementById("view");
+  const runs=await getRuns();
+  document.getElementById("updated").textContent=new Date().toLocaleTimeString();
+  const sig=view+"|"+st+"|"+runs.length+"|"+(runs[0]?runs[0].key+runs[0].state:"")+"|"+runFilter;
+  if(!force && sig===lastSig && view!=="runs" && view!=="home") return; lastSig=sig;
+  if(view==="runs") return renderRuns(V,runs);
+  if(view==="flows") return renderFlows(V,runs);
+  if(view==="pools") return renderPools(V,runs);
+  if(view==="deployments"||view==="schedulers") return renderSchedulers(V,runs);
+  return renderHome(V,runs,st);
+}
+
+/* ---------- HOME (mirrors Prefect Home: Flow Runs + Active Work Pools) ---------- */
+async function renderHome(V,runs,st){
+  crumb(`<span class="i">🏠</span> Home`);
+  const w=windowRuns(runs), cnt=stateCounts(w);
+  const cols=[["scheduled",cnt.scheduled],["pending",cnt.pending],["running",cnt.running],["completed",cnt.completed],["failed",cnt.failed]];
+  const tl=Array.from({length:60},(_,i)=>{const r=w[w.length-1-i];return `<i style="background:${r?c(r.state):'var(--card2)'}"></i>`;}).reverse().join("");
+  const pix=Array.from({length:35},(_,i)=>`<i class="${[3,10,11,17,18,19,24,25,26,31].includes(i)?'on':''}"></i>`).join("");
+  V.innerHTML=`
+  <div class="grid2">
+    <div class="panel">
+      <h2>Flow Runs</h2>
+      <div class="tldots">${tl}</div>
+      <div class="sstats">${cols.map(([k,n])=>`<div class="sstat" style="--bar:${c(k)}" onclick="nav('runs')"><div class="n">${n}</div><div class="l">${k}</div></div>`).join("")}</div>
+      <div class="emptybox"><div class="pixart">${pix}</div>
+        <div>${cnt.failed?`You currently have ${cnt.failed} failed run${cnt.failed>1?'s':''}.`:"You currently have 0 failed or crashed runs."}</div></div>
+    </div>
+    <div class="panel">
+      <h2>Active Work Pools</h2>
+      <div class="wp">
+        <div class="top"><span class="nm" onclick="nav('pools')">gik-cloud-run</span><span class="dot"></span><span class="tot">1 total</span></div>
+        <div class="cols">
+          <div class="c"><div class="l">Type</div><div class="v" style="font-size:12px">Cloud Run</div></div>
+          <div class="c"><div class="l">Work Queues</div><div class="v" style="color:var(--greenb)">●</div></div>
+          <div class="c"><div class="l">Late runs</div><div class="v">0</div></div>
+          <div class="c"><div class="l">Completed</div><div class="v">${cnt.completed}</div></div>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ---------- RUNS (mirrors Prefect Runs: metric cards + histogram + list) ---------- */
+function renderRuns(V,runs){
+  crumb(`<span class="i">▶️</span> Runs`);
+  const w=windowRuns(runs), cnt=stateCounts(w), total=w.length;
+  const durs=w.map(r=>durS(r.start,r.end)).filter(x=>x>0).sort((a,b)=>a-b);
+  const p90=durs.length?durs[Math.floor(durs.length*0.9)]:0;
+  const fmt=s=>s<60?Math.round(s)+"s":Math.floor(s/60)+"m";
+  const metrics=[
+    ["Runs",total,`${total} in 7 days`],
+    ["Failure Rate",(total?Math.round(cnt.failed/total*100):0)+"%",`${cnt.failed} failed`],
+    ["Completed",cnt.completed,"succeeded"],
+    ["Duration p90",durs.length?fmt(p90):"—","per run"],
+    ["Running now",cnt.running,"active"],
+  ];
+  // histogram: runs per day, last 7 days
+  const days=[];const now=new Date();
+  for(let i=6;i>=0;i--){const d=new Date(now-i*864e5);const key=d.toISOString().slice(0,10);
+    const dayruns=runs.filter(r=>r.start.slice(0,10)===key);
+    days.push({key:key.slice(5),comp:dayruns.filter(r=>r.state==="completed").length,fail:dayruns.filter(r=>r.state==="failed").length,tot:dayruns.length});}
+  const maxd=Math.max(1,...days.map(d=>d.tot));
+  // filter + list
+  const inRange=s=>{if(runFilter==="all")return true;const d=new Date(s.replace(" ","T")+"Z");if(runFilter==="today")return d.toISOString().slice(0,10)===now.toISOString().slice(0,10);if(runFilter==="week")return (now-d)<=7*864e5;if(runFilter==="month")return (now-d)<=31*864e5;return true;};
+  const fruns=runs.filter(r=>inRange(r.start));
+  if(selRun)selRun=runs.find(r=>r.key===selRun.key)||selRun;
+  const FB=(f,l)=>`<span class="fbtn ${runFilter===f?'on':''}" data-f="${f}">${l}</span>`;
+  const rows=fruns.map((r,i)=>`<tr data-i="${i}" ${selRun&&selRun.key===r.key?'style="background:var(--card2)"':''}>
+    <td style="padding-left:16px"><span class="runchip">▶ ${r.start} UTC</span></td><td>${dur(r.start,r.end)}</td>
+    <td><span class="badge b-${r.state}">${r.state}</span></td>
+    <td><div class="stagedots">${ORDER.map(s=>`<span class="dot" title="${s}: ${(r.tasks&&r.tasks[s])||'scheduled'}" style="background:${c((r.tasks&&r.tasks[s])||'scheduled')}"></span>`).join("")}</div></td>
+    <td style="color:var(--muted)">view →</td></tr>`).join("");
+  let detail="";
+  if(selRun) detail=`<div class="panel"><div class="h2row"><h2>Run · ${selRun.start} UTC</h2><span class="badge b-${selRun.state}">${selRun.state}</span></div>
+    <div style="color:var(--muted);font-size:12px;margin-bottom:12px">duration ${dur(selRun.start,selRun.end)} · full run log, all stages in order</div>
+    <pre class="out" id="rout">loading…</pre></div>`;
+  V.innerHTML=`
+  <div class="metrics">${metrics.map(m=>`<div class="metric"><div class="l">${m[0]}</div><div class="v">${m[1]}</div><div class="s">${m[2]}</div>
+    <div class="mbars">${days.map(d=>`<i style="height:${20+Math.round(d.tot/maxd*80)}%;background:${d.fail?'var(--red)':d.tot?'var(--green)':'var(--card2)'}"></i>`).join("")}</div></div>`).join("")}</div>
+  <div class="hist"><div class="histrow">${days.map(d=>`<div class="col">
+      ${d.fail?`<b style="height:${d.fail/maxd*100}%;background:var(--red)"></b>`:""}
+      <b style="height:${d.comp/maxd*100}%;background:var(--green)"></b></div>`).join("")}</div>
+    <div class="histx">${days.map(d=>`<span>${d.key}</span>`).join("")}</div></div>
+  <div class="filterbar">${FB("all","All")}${FB("today","Today")}${FB("week","This week")}${FB("month","This month")}
+    <span style="flex:1"></span><span style="color:var(--muted);font-size:12px">${fruns.length} run(s) · logs kept permanently</span></div>
+  <div class="panel" style="padding:6px 0">
+    <table><thead><tr><th style="padding-left:16px">Run (started)</th><th>Duration</th><th>State</th><th>Stages</th><th></th></tr></thead>
+    <tbody>${rows||'<tr><td colspan="5" class="empty">No runs in this range</td></tr>'}</tbody></table></div>${detail}`;
+  V.querySelectorAll("[data-f]").forEach(t=>t.onclick=()=>{runFilter=t.dataset.f;renderRuns(V,runs);});
+  V.querySelectorAll("tr[data-i]").forEach(tr=>tr.onclick=()=>{selRun=fruns[+tr.dataset.i];renderRuns(V,runs);});
+  if(selRun){const out=document.getElementById("rout");fetch(`/runlog?run=${selRun.key}`,{cache:"no-store"}).then(r=>r.text()).then(t=>{if(out)out.textContent=t;}).catch(e=>{if(out)out.textContent="log error: "+e.message;});}
+}
+
+/* ---------- FLOWS (mirrors Prefect Flows table) ---------- */
+function renderFlows(V,runs){
+  crumb(`<span class="i">🧩</span> Flows`);
+  const last=runs[0], nr=nextRun();
+  const act=Array.from({length:24},(_,i)=>{const r=runs[i];return `<span class="dot" style="width:4px;height:4px;background:${r?c(r.state):'var(--card2)'}"></span>`;}).join("");
+  V.innerHTML=`
+  <div class="tabs"><span class="tab on">🧩 All <span class="cnt">1</span></span><span class="tab">⭐ Favorites</span></div>
+  <div class="panel" style="padding:6px 0">
+    <table><thead><tr><th style="padding-left:16px">Flow</th><th>Last run</th><th>Next run</th><th>Schedule</th><th>Runs (7d)</th><th>State</th><th>Activity</th></tr></thead>
+    <tbody><tr data-suite="${SUITE}">
+      <td style="padding-left:16px"><div class="flowname">🧩 ecmwf-ifs-gik</div></td>
+      <td>${last?`<span class="runchip">▶ ${last.start} UTC</span>`:'<span style="color:var(--faint)">none</span>'}</td>
+      <td><span style="color:var(--muted)">${nr.inTxt}</span></td>
+      <td><span style="font-family:ui-monospace">0 6 * * *</span></td>
+      <td>${windowRuns(runs).length}</td>
+      <td>${last?`<span class="badge b-${last.state}">${last.state}</span>`:'—'}</td>
+      <td><div style="display:flex;gap:2px;align-items:center;height:14px">${act}</div></td></tr>
+    </tbody></table></div>`;
+  V.querySelectorAll("tr[data-suite]").forEach(tr=>tr.onclick=()=>nav("runs"));
+}
+
+/* ---------- WORK POOLS (mirrors Prefect Work pools) ---------- */
+function renderPools(V,runs){
+  crumb(`<span class="i">⚙️</span> Work Pools`);
+  const cnt=stateCounts(windowRuns(runs));
+  V.innerHTML=`
+  <div style="color:var(--muted);font-size:12px;margin-bottom:2px">1 / 1</div>
+  <h2 style="font-size:15px;margin:6px 0 12px">☁️ Serverless (GCP Cloud Run)</h2>
+  <div class="panel">
+    <div class="wp" style="border:none"><div class="cols" style="grid-template-columns:repeat(4,1fr)">
+      <div class="c"><div class="l">Utilizing</div><div class="v">1/1 work pools</div></div>
+      <div class="c"><div class="l">Max concurrency</div><div class="v">35 workers</div></div>
+      <div class="c"><div class="l">Region</div><div class="v" style="font-size:12px">europe-west3</div></div>
+      <div class="c"><div class="l">Runs completed (7d)</div><div class="v">${cnt.completed}</div></div>
+    </div></div>
+  </div>
+  <div class="panel">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+      <span style="color:var(--blue);font-weight:600;font-size:14px">gik-cloud-run</span>
+      <span style="color:var(--greenb);font-size:12px">✓ Active</span><span class="toggle"></span>
+      <span style="margin-left:auto;color:var(--muted);font-size:12px">lithops · gcp_cloudrun</span>
+    </div>
+    <div class="kv">
+      <div class="row"><span class="k">Backend</span><span class="v">lithops · gcp_cloudrun</span></div>
+      <div class="row"><span class="k">Project</span><span class="v">e4drr-crafd</span></div>
+      <div class="row"><span class="k">Region</span><span class="v">europe-west3</span></div>
+      <div class="row"><span class="k">Runtime</span><span class="v">ecmwf-lithops-runtime:50r1</span></div>
+      <div class="row"><span class="k">Max workers</span><span class="v">35</span></div>
+      <div class="row"><span class="k">GCS store</span><span class="v">gik-ecmwf-aws-tf</span></div>
+      <div class="row"><span class="k">Mirror</span><span class="v">source.coop e4drr-project</span></div>
+    </div>
+  </div>`;
+}
+
+/* ---------- SCHEDULERS / DEPLOYMENTS ---------- */
+function renderSchedulers(V,runs){
+  crumb(`<span class="i">⏱️</span> Schedulers`);
+  const nr=nextRun(), last=runs[0];
+  V.innerHTML=`
+  <div class="panel" style="padding:6px 0">
+    <table><thead><tr><th style="padding-left:16px">Deployment</th><th>Flow</th><th>Cron</th><th>Next run</th><th>Work pool</th><th>Last state</th></tr></thead>
+    <tbody><tr>
+      <td style="padding-left:16px"><div class="flowname">⏱️ ecmwf-ifs-gik-daily</div></td><td>ecmwf-ifs-gik</td>
+      <td><span style="font-family:ui-monospace">0 6 * * *</span></td>
+      <td><span style="color:var(--muted)">${nr.when} · ${nr.inTxt}</span></td><td>gik-cloud-run</td>
+      <td>${last?`<span class="badge b-${last.state}">${last.state}</span>`:'—'}</td></tr>
+    </tbody></table></div>
+  <div class="panel"><h2>Schedule detail</h2>
+    <div class="kv">
+      <div class="row"><span class="k">Cron</span><span class="v green">0 6 * * *</span></div>
+      <div class="row"><span class="k">Timezone</span><span class="v">UTC</span></div>
+      <div class="row"><span class="k">Forecast cycle</span><span class="v">00z</span></div>
+      <div class="row"><span class="k">Era logic</span><span class="v">49r1 ≤ 2026-05-12 &lt; 50r1</span></div>
+      <div class="row"><span class="k">Next run</span><span class="v">${nr.when}</span></div>
+    </div></div>`;
+}
+
+function setAuto(){if(timer)clearInterval(timer);if(document.getElementById("auto").checked)timer=setInterval(()=>render(false),5000);}
+document.getElementById("auto").onchange=setAuto;
+render(true);setAuto();
+</script>
+</body>
+</html>
