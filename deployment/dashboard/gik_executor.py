@@ -45,19 +45,14 @@ def command_for(stage, q):
     if stage == "discover":
         return [PY, "-c", DISCOVER % (KEY, date, date)]
     if stage == "lithops_parquet":
-        era, stream, refdate = era_for(date)
-        script = (
-            "set -e; cp lithops_config.yaml /tmp/_cfg.bak; "
-            "sed 's#runtime: gcr.io/e4drr-crafd/ecmwf-lithops-runtime.*#"
-            "runtime: gcr.io/e4drr-crafd/ecmwf-lithops-runtime:%s#' /tmp/_cfg.bak > lithops_config.yaml; "
-            "export ECMWF_CONTROL_STREAM=%s ECMWF_REFERENCE_DATE=%s ECMWF_RESOLUTION=0p25 "
-            "GCS_PARQUET_PREFIX=v20260623_run_par_ecmwf; "
-            "echo \"[era %s] stream=%s refdate=%s runtime=:%s date=%s\"; "
-            "%s run_lithops_ecmwf.py --date %s --run %s --max-workers 5 --yes; rc=$?; "
-            "cp /tmp/_cfg.bak lithops_config.yaml; exit $rc"
-            % (era, stream, refdate, era, stream, refdate, era, date, PY, date, run)
-        )
-        return ["bash", "-c", script]
+        era, _, _ = era_for(date)
+        # Delegate to the committed, preflight-guarded runner (run_era_daily.sh):
+        # it pins BOTH era switches from era_profiles/<era>.env + lithops_config.<era>.yaml,
+        # refuses on switch mismatch or wrong-era date, treats the exit-124 hang as success,
+        # and verifies 51/51 objects in GCS. Keeps era logic in one reviewed place, not here.
+        return ["bash", "-c",
+                "GIK_VENV_PY=%s MAX_WORKERS=5 ./run_era_daily.sh %s %s %s"
+                % (PY, era, date, run)]
     return None
 
 class H(http.server.BaseHTTPRequestHandler):
