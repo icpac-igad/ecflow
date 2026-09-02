@@ -26,11 +26,28 @@ case "$role" in
     # --help` lists only ECF_PORT / ECF_HOME / ECF_LOG / ECF_CHECK etc.), so do
     # not add flags here expecting them to take effect.
     #
-    # Runs in the foreground so Docker owns the lifecycle and restart policy.
-    # ecflow_start.sh is deliberately not used: it backgrounds the process with
-    # nohup, which would leave the container with no main process to supervise.
+    # ecflow_server restores its checkpoint on boot but comes up HALTED (an ecFlow
+    # safety default), so scheduling — and thus the daily cron — would stay paused
+    # after any container restart until an operator resumes it. To keep the daily
+    # workflow uninterrupted across restarts, start the server, wait for it to
+    # answer, then resume it to RUNNING. The script stays PID 1 and forwards signals
+    # so Docker still owns the lifecycle (ecflow_start.sh is still avoided: it nohups
+    # the process, leaving the container with nothing to supervise).
     cd "${ECF_HOME}"
-    exec ecflow_server
+    ecflow_server &
+    srv=$!
+    trap 'kill -TERM "$srv" 2>/dev/null' TERM INT
+    port="${ECF_PORT:-3141}"
+    for _ in $(seq 1 30); do
+      if ecflow_client --host=localhost --port="$port" --ping >/dev/null 2>&1; then
+        ecflow_client --host=localhost --port="$port" --restart >/dev/null 2>&1 \
+          && echo "entrypoint: ecflow_server resumed to RUNNING (post-checkpoint restore)" >&2 \
+          || echo "WARN: could not resume ecflow_server to RUNNING; scheduling may be halted" >&2
+        break
+      fi
+      sleep 1
+    done
+    wait "$srv"
     ;;
 
   http)
