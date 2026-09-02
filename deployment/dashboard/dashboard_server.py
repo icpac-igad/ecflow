@@ -18,6 +18,24 @@ INDEX    = os.path.join(RUN_LOGS, "index.json")
 STAGE_NAMES = ["discover", "lithops_parquet", "icechunk_append", "publish_mirror"]
 _lock = threading.Lock()
 
+# Job logs run under `set -x`, which traces secret exports (ECF_PASS, keys, tokens) into
+# the .1 output. Scrub them so the dashboard neither stores nor serves any secret.
+_REDACTIONS = [
+    (re.compile(r"(ECF_PASS[=\s'\"]+)\S+"), r"\1***"),
+    (re.compile(r"(passwd[:=]\s*)\S+"), r"\1***"),
+    (re.compile(r"((?:password|secret|token|api[_-]?key|access[_-]?key|auth)[\"']?\s*[=:]\s*[\"']?)[^\s\"'&]+", re.I), r"\1***"),
+    (re.compile(r"AKIA[0-9A-Z]{16}"), "***AWS_KEY***"),
+    (re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----", re.S), "***PRIVATE_KEY_REDACTED***"),
+    (re.compile(r"(Bearer\s+)[A-Za-z0-9._\-]+"), r"\1***"),
+]
+
+def _redact(text):
+    if not text:
+        return text
+    for pat, repl in _REDACTIONS:
+        text = pat.sub(repl, text)
+    return text
+
 def _runkey(r):
     return r["start"].replace("-", "").replace(":", "").replace(" ", "_")
 
@@ -50,7 +68,10 @@ def _archive_logs(r):
         for s in r.get("tasks", {}):
             src = os.path.join(JOB_DIR, s + ".1")
             if os.path.exists(src):
-                shutil.copyfile(src, os.path.join(d, s + ".log"))
+                with open(src, encoding="utf-8", errors="ignore") as fh:
+                    data = fh.read()
+                with open(os.path.join(d, s + ".log"), "w", encoding="utf-8") as out:
+                    out.write(_redact(data))    # never persist secrets to the archive
     except Exception:
         pass
 
@@ -178,7 +199,7 @@ class H(http.server.BaseHTTPRequestHandler):
                 if os.path.exists(f):
                     try:
                         with open(f, encoding="utf-8", errors="ignore") as fh:
-                            return fh.read()
+                            return _redact(fh.read())   # scrub even pre-existing archives on serve
                     except Exception:
                         return None
                 return None
@@ -230,7 +251,24 @@ def _archiver():
         time.sleep(10)
 
 
+def _sanity_check():
+    """Fail LOUD on the recurring misconfiguration: genericized placeholder paths
+    (/path/to/...) not overridden by the systemd unit, so the dashboard silently reads
+    an empty/absent log and shows no runs. Warn prominently instead of failing quietly."""
+    ok = True
+    for name, val, is_dir in (("ECF_LOG", ECF_LOG, False), ("GIK_JOB_DIR", JOB_DIR, True)):
+        bad = "/path/to/" in val or not (os.path.isdir(val) if is_dir else os.path.exists(val))
+        if bad:
+            ok = False
+            print("!!! CONFIG WARNING: %s=%r is a placeholder or does not exist — "
+                  "set ECF_DATA_DIR (and GIK_SUITE) in the systemd unit; runs will not show."
+                  % (name, val), flush=True)
+    if ok:
+        print("config ok: ECF_LOG + GIK_JOB_DIR resolve to real paths", flush=True)
+    return ok
+
 if __name__ == "__main__":
+    _sanity_check()         # loudly flag placeholder/missing paths (the recurring silent bug)
     _bootstrap_index()      # make already-archived runs visible on startup
     threading.Thread(target=_archiver, daemon=True).start()
     srv = http.server.ThreadingHTTPServer((BIND, PORT), H)
