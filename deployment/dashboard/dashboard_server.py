@@ -101,9 +101,21 @@ def _bootstrap_index():
         if changed:
             _save_index(idx)
 
+def _finalize_state(r):
+    """Correct a run stuck on 'running'. A run whose LAST stage completed is done; any
+    failed stage means failed. Without this, a run whose suite-level 'complete' scrolled
+    out of the log window before it was captured shows 'running' forever."""
+    t = r.get("tasks", {})
+    if any(v == "failed" for v in t.values()):
+        r["state"] = "failed"
+    elif t.get(STAGE_NAMES[-1]) == "completed":     # publish_mirror done => whole run done
+        r["state"] = "completed"
+    return r
+
 def sync_runs(limit=200):
     """Parse the rolling log window, merge into the persistent index (old runs are
-    never dropped), archive the newest run's logs, and return all runs newest-first."""
+    never dropped), finalize stuck states, archive the newest run's logs, and return
+    all runs newest-first."""
     parsed = parse_runs()               # newest-first, from the log's tail window
     with _lock:
         idx = _load_index()
@@ -114,6 +126,8 @@ def sync_runs(limit=200):
             if old is None or r["state"] != "running" or len(r.get("tasks", {})) >= len(old.get("tasks", {})):
                 if not (old and old.get("state") != "running" and r["state"] == "running"):
                     idx[k] = r
+        for r in idx.values():          # fix any run left stuck on 'running'
+            _finalize_state(r)
         _save_index(idx)
         allruns = sorted(idx.values(), key=lambda x: x["start"], reverse=True)[:limit]
     if parsed:
