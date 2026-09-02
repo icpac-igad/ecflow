@@ -13,29 +13,91 @@ ECF_DATA = os.environ.get("ECF_DATA_DIR", "/path/to/ecflow/data")
 ECF_LOG = os.environ.get("ECF_LOG", "%s/e4drr-ecflow.3141.ecf.log" % ECF_DATA)
 SUITE   = os.environ.get("GIK_SUITE", "ecmwf_ifs_gik")
 JOB_DIR = os.environ.get("GIK_JOB_DIR", "%s/%s/day" % (ECF_DATA, SUITE))
-RUN_LOGS = os.path.join(ROOT, "run_logs")
+RUN_LOGS = os.environ.get("RUN_LOGS", os.path.join(ROOT, "run_logs"))
+INDEX    = os.path.join(RUN_LOGS, "index.json")
 STAGE_NAMES = ["discover", "lithops_parquet", "icechunk_append", "publish_mirror"]
+_lock = threading.Lock()
 
 def _runkey(r):
     return r["start"].replace("-", "").replace(":", "").replace(" ", "_")
 
-def archive_latest(runs):
-    """Snapshot the current stage job-logs into a per-run archive, once, so past
-    runs remain viewable after ecFlow overwrites its live .1 files on the next run."""
-    if not runs:
-        return
-    r = runs[0]  # most recent
-    d = os.path.join(RUN_LOGS, _runkey(r))
-    if os.path.isdir(d):
-        return
+def _load_index():
+    """Persistent record of every run ever seen — the source of truth for /runs, so
+    history is never lost when a run scrolls out of the ecFlow log's rolling window."""
+    try:
+        with open(INDEX) as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+def _save_index(idx):
+    try:
+        os.makedirs(RUN_LOGS, exist_ok=True)
+        tmp = INDEX + ".tmp"
+        with open(tmp, "w") as f:
+            json.dump(idx, f)
+        os.replace(tmp, INDEX)          # atomic, so a reader never sees a half-written file
+    except Exception:
+        pass
+
+def _archive_logs(r):
+    """Snapshot the current .1 job-logs for run r into run_logs/<key>/. Called on the
+    newest run each cycle, so a run first seen mid-flight is refreshed to completion
+    before ecFlow overwrites its .1 files on the next run."""
+    d = os.path.join(RUN_LOGS, r["key"])
     try:
         os.makedirs(d, exist_ok=True)
-        for s in STAGE_NAMES:
+        for s in r.get("tasks", {}):
             src = os.path.join(JOB_DIR, s + ".1")
             if os.path.exists(src):
                 shutil.copyfile(src, os.path.join(d, s + ".log"))
     except Exception:
         pass
+
+def _bootstrap_index():
+    """Seed the index from run_logs/ dirs already on disk (from before the index
+    existed, or from runs that have since scrolled out of the log), so every archived
+    run stays visible in /runs. Runs are keyed YYYYMMDD_HHMMSS."""
+    with _lock:
+        idx = _load_index()
+        changed = False
+        try:
+            entries = os.listdir(RUN_LOGS)
+        except Exception:
+            entries = []
+        for key in entries:
+            d = os.path.join(RUN_LOGS, key)
+            if key in idx or not re.match(r"^\d{8}_\d{6}$", key) or not os.path.isdir(d):
+                continue
+            tasks = {}
+            for s in STAGE_NAMES:
+                if os.path.exists(os.path.join(d, s + ".log")):
+                    tasks[s] = "completed"
+            start = "%s-%s-%s %s:%s:%s" % (key[0:4], key[4:6], key[6:8], key[9:11], key[11:13], key[13:15])
+            idx[key] = {"start": start, "end": start, "tasks": tasks,
+                        "state": "completed", "key": key, "bootstrapped": True}
+            changed = True
+        if changed:
+            _save_index(idx)
+
+def sync_runs(limit=200):
+    """Parse the rolling log window, merge into the persistent index (old runs are
+    never dropped), archive the newest run's logs, and return all runs newest-first."""
+    parsed = parse_runs()               # newest-first, from the log's tail window
+    with _lock:
+        idx = _load_index()
+        for r in parsed:
+            k = r["key"]
+            old = idx.get(k)
+            # take the newer view unless it's a partial re-parse of an already-terminal run
+            if old is None or r["state"] != "running" or len(r.get("tasks", {})) >= len(old.get("tasks", {})):
+                if not (old and old.get("state") != "running" and r["state"] == "running"):
+                    idx[k] = r
+        _save_index(idx)
+        allruns = sorted(idx.values(), key=lambda x: x["start"], reverse=True)[:limit]
+    if parsed:
+        _archive_logs(parsed[0])        # refresh the newest run's per-stage logs
+    return allruns
 
 _LINE = re.compile(
     r"\[(\d\d):(\d\d):(\d\d) (\d\d)\.(\d\d)\.(\d{4})\]\s+(active|complete|aborted|queued):\s+(/" + SUITE + r"\S*)")
@@ -76,7 +138,6 @@ def parse_runs(limit=30):
     out = runs[-limit:][::-1]
     for r in out:
         r["key"] = _runkey(r)
-    archive_latest(out)
     return out
 
 
@@ -104,7 +165,7 @@ class H(http.server.BaseHTTPRequestHandler):
                 self._send(500, str(e), "text/plain")
             return
         if path == "/runs":
-            self._send(200, json.dumps(parse_runs())); return
+            self._send(200, json.dumps(sync_runs())); return
         if path == "/runlog":
             q = urllib.parse.parse_qs(self.path.split("?", 1)[1]) if "?" in self.path else {}
             key = (q.get("run") or [""])[0]
@@ -157,17 +218,20 @@ class H(http.server.BaseHTTPRequestHandler):
 
 
 def _archiver():
-    """Archive every run's logs promptly, independent of browser activity, so logs
-    are never lost when ecFlow overwrites its live .1 files on the next run."""
+    """Continuously merge runs into the persistent index and archive their logs,
+    independent of browser activity. Never dies: every iteration is guarded, so one
+    bad parse can't stop archiving. Paired with systemd Restart=always, past runs and
+    their logs are retained across the process's whole lifetime and restarts."""
     while True:
         try:
-            parse_runs()      # calls archive_latest() on the most recent run
+            sync_runs()
         except Exception:
             pass
         time.sleep(10)
 
 
 if __name__ == "__main__":
+    _bootstrap_index()      # make already-archived runs visible on startup
     threading.Thread(target=_archiver, daemon=True).start()
     srv = http.server.ThreadingHTTPServer((BIND, PORT), H)
     print(f"E4DRR ecFlow dashboard on http://{BIND}:{PORT}  (proxying {ECFLOW})", flush=True)
