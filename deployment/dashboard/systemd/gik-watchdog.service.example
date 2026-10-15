@@ -1,0 +1,9 @@
+# Copy to ~/.config/systemd/user/gik-watchdog.service and set INSTALL_DIR.
+# Paired with gik-watchdog.timer. Un-sticks a stuck-aborted daily GIK suite.
+[Unit]
+Description=GIK ecFlow self-healing watchdog
+After=docker.service
+[Service]
+Type=oneshot
+# Optional overrides: GIK_SUITE, ECFLOW_CONTAINER, ECF_PORT, WATCHDOG_COOLDOWN_H
+ExecStart=/usr/bin/bash %h/INSTALL_DIR/gik-watchdog.sh

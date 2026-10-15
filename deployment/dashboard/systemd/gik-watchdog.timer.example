@@ -1,0 +1,11 @@
+# Copy to ~/.config/systemd/user/gik-watchdog.timer, then:
+#   systemctl --user daemon-reload && systemctl --user enable --now gik-watchdog.timer
+# Runs the watchdog hourly; the script's own cooldown caps how often it actually requeues.
+[Unit]
+Description=Run the GIK self-healing watchdog hourly
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=1h
+Persistent=true
+[Install]
+WantedBy=timers.target

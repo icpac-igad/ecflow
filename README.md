@@ -92,6 +92,7 @@ The workflow is designed to keep running with **no babysitting**:
 | State across restart | ecFlow checkpoints every 120 s; the entrypoint **restores from checkpoint** |
 | **Server comes back RUNNING** (not HALTED) after a restart | the entrypoint waits for the server, then `--restart`s it — so scheduling never stays paused |
 | A day aborts | the cron re-queues the family fresh next day |
+| **Suite stuck `aborted`** (an abort ecFlow didn't auto-requeue) | a host **watchdog** (hourly systemd timer) requeues + resumes it, with a cooldown so a genuinely-failing day isn't re-run each tick |
 
 ## 6. Where everything lives
 
